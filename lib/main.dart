@@ -1,39 +1,31 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 
 void main() {
-  runApp(const MyApp());
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter CRUD Demo',
+      title: 'CRUD API Flutter ',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+        primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'Flutter CRUD Home Page'),
+      home: ProductListScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
-
+class ProductListScreen extends StatefulWidget {
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  _ProductListScreenState createState() => _ProductListScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  final String apiUrl = "/https://t2210m-flutter.onrender.com/products";
-  List products = [];
+class _ProductListScreenState extends State<ProductListScreen> {
+  List<dynamic> products = [];
 
   @override
   void initState() {
@@ -42,118 +34,162 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> fetchProducts() async {
-    try {
-      final response = await http.get(Uri.parse(apiUrl));
-      if (response.statusCode == 200) {
-        setState(() {
-          products = json.decode(response.body);
-        });
-      } else {
-        throw Exception('Failed to load products');
-      }
-    } catch (e) {
-      print('Error fetching products: $e');
+    final response = await http.get(Uri.parse('https://t2210m-flutter.onrender.com/products'));
+    if (response.statusCode == 200) {
+      setState(() {
+        products = jsonDecode(response.body);
+      });
+    } else {
+      showErrorSnackBar('Failed to load products');
     }
   }
 
-  Future<void> addProduct(Map<String, dynamic> product) async {
-    try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(product),
-      );
-      if (response.statusCode == 201) {
-        fetchProducts();
-      } else {
-        print('Failed to add product: ${response.body}');
-        throw Exception('Failed to add product');
-      }
-    } catch (e) {
-      print('Error adding product: $e');
+  Future<void> createProduct(String name, String description, int price) async {
+    final response = await http.post(
+      Uri.parse('https://t2210m-flutter.onrender.com/products'),
+      headers: <String, String>{
+        'Content-Type': 'application/json; charset=UTF-8',
+      },
+      body: jsonEncode(<String, dynamic>{
+        'name': name,
+        'description': description,
+        'price': price,
+      }),
+    );
+
+    if (response.statusCode == 201) {
+      fetchProducts();
+      showSuccessSnackBar('Product added successfully!');
+    } else {
+      showErrorSnackBar('Failed to create product');
     }
   }
 
-  Future<void> updateProduct(String id, Map<String, dynamic> product) async {
-    try {
-      final response = await http.put(
-        Uri.parse('$apiUrl/$id'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(product),
-      );
-      if (response.statusCode == 200) {
-        fetchProducts();
-      } else {
-        print('Failed to update product: ${response.body}');
-        throw Exception('Failed to update product');
-      }
-    } catch (e) {
-      print('Error updating product: $e');
+  Future<void> updateProduct(String id, String name, String description, int price) async {
+    final response = await http.put(
+      Uri.parse('https://t2210m-flutter.onrender.com/products/$id'),
+      headers: <String, String>{
+        'Content-Type': 'application/json; charset=UTF-8',
+      },
+      body: jsonEncode(<String, dynamic>{
+        'name': name,
+        'description': description,
+        'price': price,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      fetchProducts();
+      showSuccessSnackBar('Product updated successfully!');
+    } else {
+      showErrorSnackBar('Failed to update product');
     }
   }
 
   Future<void> deleteProduct(String id) async {
-    try {
-      final response = await http.delete(Uri.parse('$apiUrl/$id'));
-      if (response.statusCode == 200) {
-        fetchProducts();
-      } else {
-        print('Failed to delete product: ${response.body}');
-        throw Exception('Failed to delete product');
-      }
-    } catch (e) {
-      print('Error deleting product: $e');
+    final response = await http.delete(
+      Uri.parse('https://t2210m-flutter.onrender.com/products/$id'),
+    );
+
+    if (response.statusCode == 200) {
+      fetchProducts();
+      showSuccessSnackBar('Product deleted successfully!');
+    } else {
+      showErrorSnackBar('Failed to delete product');
     }
   }
 
-  void showProductDialog({Map<String, dynamic>? product}) {
-    final TextEditingController nameController = TextEditingController(text: product?['name'] ?? '');
-    final TextEditingController descriptionController = TextEditingController(text: product?['description'] ?? '');
-    final TextEditingController priceController = TextEditingController(text: product?['price']?.toString() ?? '');
+  void showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.green));
+  }
+
+  void showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.red));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Product List'),
+      ),
+      body: ListView.builder(
+        itemCount: products.length,
+        itemBuilder: (context, index) {
+          final product = products[index];
+          return ListTile(
+            title: Text(product['name']),
+            subtitle: Text('Price: \$${product['price']}'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.edit),
+                  onPressed: () => _showUpdateProductDialog(product),
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete),
+                  onPressed: () => deleteProduct(product['_id']),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showCreateProductDialog,
+        child: Icon(Icons.add),
+      ),
+    );
+  }
+
+  void _showCreateProductDialog() {
+    final nameController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final priceController = TextEditingController();
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(product == null ? 'Add Product' : 'Update Product'),
+          title: Text('Create Product'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [
+            children: <Widget>[
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(labelText: 'Name'),
+                decoration: InputDecoration(labelText: 'Name'),
               ),
               TextField(
                 controller: descriptionController,
-                decoration: const InputDecoration(labelText: 'Description'),
+                decoration: InputDecoration(labelText: 'Description'),
               ),
               TextField(
                 controller: priceController,
-                decoration: const InputDecoration(labelText: 'Price'),
+                decoration: InputDecoration(labelText: 'Price'),
                 keyboardType: TextInputType.number,
               ),
             ],
           ),
-          actions: [
+          actions: <Widget>[
             TextButton(
+              child: Text('Cancel'),
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
             ),
             TextButton(
+              child: Text('Create'),
               onPressed: () {
-                final Map<String, dynamic> newProduct = {
-                  'name': nameController.text,
-                  'description': descriptionController.text,
-                  'price': int.parse(priceController.text),
-                };
-                if (product == null) {
-                  addProduct(newProduct);
+                final name = nameController.text;
+                final description = descriptionController.text;
+                final price = int.tryParse(priceController.text) ?? 0;
+
+                if (name.isNotEmpty && description.isNotEmpty && price > 0) {
+                  createProduct(name, description, price);
+                  Navigator.of(context).pop();
                 } else {
-                  updateProduct(product['id'], newProduct);
+                  showErrorSnackBar('Please enter valid data');
                 }
-                Navigator.of(context).pop();
               },
-              child: const Text('Save'),
             ),
           ],
         );
@@ -161,44 +197,57 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: products.isEmpty
-            ? const CircularProgressIndicator()
-            : ListView.builder(
-          itemCount: products.length,
-          itemBuilder: (context, index) {
-            return ListTile(
-              title: Text(products[index]['name']),
-              subtitle: Text(products[index]['description']),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: () => showProductDialog(product: products[index]),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete),
-                    onPressed: () => deleteProduct(products[index]['id']),
-                  ),
-                ],
+  void _showUpdateProductDialog(Map<String, dynamic> product) {
+    final nameController = TextEditingController(text: product['name']);
+    final descriptionController = TextEditingController(text: product['description']);
+    final priceController = TextEditingController(text: product['price'].toString());
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Update Product'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(labelText: 'Name'),
               ),
-            );
-          },
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => showProductDialog(),
-        tooltip: 'Add Product',
-        child: const Icon(Icons.add),
-      ),
+              TextField(
+                controller: descriptionController,
+                decoration: InputDecoration(labelText: 'Description'),
+              ),
+              TextField(
+                controller: priceController,
+                decoration: InputDecoration(labelText: 'Price'),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: Text('Update'),
+              onPressed: () {
+                final name = nameController.text;
+                final description = descriptionController.text;
+                final price = int.tryParse(priceController.text) ?? 0;
+
+                if (name.isNotEmpty && description.isNotEmpty && price > 0) {
+                  updateProduct(product['_id'], name, description, price);
+                  Navigator.of(context).pop();
+                } else {
+                  showErrorSnackBar('Please enter valid data');
+                }
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 }
